@@ -1,0 +1,167 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Serverless CloudFormation template with S3, Lambda, and API Gateway integration
+
+Parameters:
+  Environment:
+    Type: String
+    Default: ""
+    Description: Deployment environment (e.g., dev, prod, staging)
+  
+  Region:
+    Type: String
+    Default: ""
+    Description: AWS region where resources will be created
+  
+  ResourcePrefix:
+    Type: String
+    Default: ""
+    Description: Prefix for resource naming convention
+  
+  CreatedBy:
+    Type: String
+    Default: ""
+    Description: Tag to indicate resource creator
+  
+  CreatedFor:
+    Type: String
+    Default: ""
+    Description: Tag to indicate purpose of the resource
+
+Resources:
+  # S3 Bucket
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ResourcePrefix}-${Environment}-bucket"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: CreatedBy
+          Value: !Ref CreatedBy
+        - Key: CreatedFor
+          Value: !Ref CreatedFor
+        - Key: Environment
+          Value: !Ref Environment
+
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ResourcePrefix}-${Environment}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub "${ResourcePrefix}-${Environment}-s3-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub "arn:aws:s3:::${ResourcePrefix}-${Environment}-bucket/*"
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub "arn:aws:s3:::${ResourcePrefix}-${Environment}-bucket"
+      Tags:
+        - Key: CreatedBy
+          Value: !Ref CreatedBy
+        - Key: CreatedFor
+          Value: !Ref CreatedFor
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Lambda Function
+  LambdaForS3PresignedUrl:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ResourcePrefix}-${Environment}-lambda"
+      Handler: lambda_script.handler
+      Runtime: nodejs18.x
+      CodeUri: ../src/
+      Timeout: 300
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          S3_BUCKET_NAME: !Ref S3Bucket
+          ENVIRONMENT: !Ref Environment
+          REGION: !Ref Region
+      Tags:
+        CreatedBy: !Ref CreatedBy
+        CreatedFor: !Ref CreatedFor
+        Environment: !Ref Environment
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /files-upload
+            Method: post
+            RestApiId: !Ref ApiGateway
+
+  # API Gateway
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${ResourcePrefix}-${Environment}-api"
+      StageName: dev
+      EndpointConfiguration:
+        Type: REGIONAL
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      Tags:
+        CreatedBy: !Ref CreatedBy
+        CreatedFor: !Ref CreatedFor
+        Environment: !Ref Environment
+
+Outputs:
+  S3BucketName:
+    Value: !Ref S3Bucket
+    Description: Name of the created S3 bucket
+    Export:
+      Name: !Sub "${AWS::StackName}-S3BucketName"
+  
+  LambdaFunctionName:
+    Value: !Ref LambdaForS3PresignedUrl
+    Description: Lambda function name
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaFunctionName"
+  
+  LambdaFunctionArn:
+    Value: !GetAtt LambdaForS3PresignedUrl.Arn
+    Description: Lambda function ARN
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaFunctionArn"
+  
+  ApiGatewayId:
+    Value: !Ref ApiGateway
+    Description: API Gateway ID
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiGatewayId"
+  
+  ApiEndpoint:
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/files-upload"
+    Description: API Gateway endpoint URL
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiEndpoint"
+  
+  ApiGatewayDomainName:
+    Value: !Sub "${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com"
+    Description: API Gateway domain name
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiGatewayDomain"
