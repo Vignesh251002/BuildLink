@@ -17,23 +17,34 @@ Parameters:
     Type: String
     Default: ""
     Description: Prefix for resource naming convention
-  
-  CreatedBy:
+
+  ResourceType:
+    Type: String    
+    Default: ""
+    Description: Type of resource being created
+
+  ArtifactBucket:
     Type: String
     Default: ""
-    Description: Tag to indicate resource creator
-  
-  CreatedFor:
+    Description: S3 bucket for storing deployment artifacts  
+
+  CreateBucket:
     Type: String
-    Default: ""
-    Description: Tag to indicate purpose of the resource
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Whether to create the artifact bucket or use existing one
+ 
+ 
+Conditions:
+  CreateArtifactBucket: !Equals [!Ref CreateBucket, "true"]  
 
 Resources:
   # S3 Bucket
   S3Bucket:
     Type: AWS::S3::Bucket
+    Condition: CreateArtifactBucket
     Properties:
-      BucketName: !Sub "${ResourcePrefix}-${Environment}-bucket"
+      BucketName: !Ref ArtifactBucket
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -42,12 +53,12 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
       Tags:
-        - Key: CreatedBy
-          Value: !Ref CreatedBy
-        - Key: CreatedFor
-          Value: !Ref CreatedFor
+        - Key: Project
+          Value: !Ref ResourcePrefix
+        - Key: ResourceType
+          Value: !Ref ResourceType
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref Environment 
 
   # IAM Role for Lambda
   LambdaExecutionRole:
@@ -78,12 +89,12 @@ Resources:
                 Action: s3:ListBucket
                 Resource: !Sub "arn:aws:s3:::${ResourcePrefix}-${Environment}-bucket"
       Tags:
-        - Key: CreatedBy
-          Value: !Ref CreatedBy
-        - Key: CreatedFor
-          Value: !Ref CreatedFor
+        - Key: Project
+          Value: !Ref ResourcePrefix
+        - Key: ResourceType
+          Value: !Ref ResourceType
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref Environment 
 
   # Lambda Function
   LambdaForS3PresignedUrl:
@@ -101,8 +112,8 @@ Resources:
           ENVIRONMENT: !Ref Environment
           REGION: !Ref Region
       Tags:
-        CreatedBy: !Ref CreatedBy
-        CreatedFor: !Ref CreatedFor
+        project: !Ref ResourcePrefix
+        ResourceType: !Ref ResourceType
         Environment: !Ref Environment
       Events:
         ApiEvent:
@@ -125,8 +136,8 @@ Resources:
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
         AllowOrigin: "'*'"
       Tags:
-        CreatedBy: !Ref CreatedBy
-        CreatedFor: !Ref CreatedFor
+        project: !Ref ResourcePrefix
+        ResourceType: !Ref ResourceType
         Environment: !Ref Environment
 
 Outputs:
