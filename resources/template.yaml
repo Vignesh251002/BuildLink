@@ -88,6 +88,9 @@ Resources:
               - Effect: Allow
                 Action: s3:ListBucket
                 Resource: !Sub "arn:aws:s3:::${ResourcePrefix}-${Environment}-bucket"
+              - Effect: Allow
+                Action: iam:GetRole
+                Resource: !Sub "arn:aws:iam::${AWS::AccountId}:role/${ResourcePrefix}-${Environment}-lambda-role"  
       Tags:
         - Key: Project
           Value: !Ref ResourcePrefix
@@ -108,7 +111,7 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
-          S3_BUCKET_NAME: !Ref S3Bucket
+          S3_BUCKET_NAME: !Ref ArtifactBucket
           ENVIRONMENT: !Ref Environment
           REGION: !Ref Region
       Tags:
@@ -142,7 +145,7 @@ Resources:
 
 Outputs:
   S3BucketName:
-    Value: !Ref S3Bucket
+    Value: !Ref ArtifactBucket
     Description: Name of the created S3 bucket
     Export:
       Name: !Sub "${AWS::StackName}-S3BucketName"
