@@ -88,9 +88,7 @@ Resources:
               - Effect: Allow
                 Action: s3:ListBucket
                 Resource: !Sub "arn:aws:s3:::${ResourcePrefix}-${Environment}-bucket"
-              - Effect: Allow
-                Action: iam:GetRole
-                Resource: !Sub "arn:aws:iam::${AWS::AccountId}:role/${ResourcePrefix}-${Environment}-lambda-role"  
+              
       Tags:
         - Key: Project
           Value: !Ref ResourcePrefix
